@@ -2841,9 +2841,6 @@
             
             // 重新生成权重编辑表格，确保客观权重自动填入
             generateWeightEditTable();
-            
-            // 重新生成图表
-            initCharts('weight');
         }
 
 
@@ -2868,6 +2865,9 @@
                 
                 // 计算综合指标云特征
                 calculateOverallCloud();
+                
+                // 初始化图表
+                initCharts('dematel');
                 
                 // 确保所有图表正确渲染
                 setTimeout(function() {
