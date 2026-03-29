@@ -1976,7 +1976,7 @@
         function generateDirectMatrixTable() {
             const container = document.getElementById('directMatrixTable');
             
-            let html = '<table style="width: 100%; table-layout: fixed;"><thead><tr><th style="width: 60px;">指标</th>';
+            let html = '<table style="width: 100%; table-layout: fixed;"><thead><tr><th style="width: 60px; text-align: center;">指标</th>';
             indicators.forEach(ind => {
                 html += `<th style="width: 40px; text-align: center;">${ind}</th>`;
             });
