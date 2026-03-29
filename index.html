@@ -891,7 +891,21 @@
             return result;
         }
 
+        // 矩阵求逆缓存
+        const matrixInverseCache = new Map();
+        
+        // 生成矩阵的唯一键
+        function getMatrixKey(matrix) {
+            return matrix.map(row => row.join(',')).join('|');
+        }
+        
         function matrixInverse(matrix) {
+            // 检查缓存
+            const key = getMatrixKey(matrix);
+            if (matrixInverseCache.has(key)) {
+                return matrixInverseCache.get(key);
+            }
+            
             // 简化实现，使用高斯-约旦消元法
             const n = matrix.length;
             const augmented = [];
@@ -941,6 +955,9 @@
                 inverse.push(augmented[i].slice(n));
             }
             
+            // 缓存结果
+            matrixInverseCache.set(key, inverse);
+            
             return inverse;
         }
 
@@ -951,42 +968,93 @@
             // 专家数量
             const expertCount = 13;
             
-            let html = '<table><thead><tr><th style="text-align: center;">指标</th><th style="text-align: center;">风险因素</th>';
+            // 使用documentFragment来批量添加DOM元素，减少重排
+            const fragment = document.createDocumentFragment();
+            const table = document.createElement('table');
+            
+            // 创建表头
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            
+            const indicatorTh = document.createElement('th');
+            indicatorTh.style.textAlign = 'center';
+            indicatorTh.textContent = '指标';
+            headerRow.appendChild(indicatorTh);
+            
+            const factorTh = document.createElement('th');
+            factorTh.style.textAlign = 'center';
+            factorTh.textContent = '风险因素';
+            headerRow.appendChild(factorTh);
             
             // 添加专家列
             for (let i = 1; i <= expertCount; i++) {
-                html += `<th style="text-align: center;">专家${i}</th>`;
+                const th = document.createElement('th');
+                th.style.textAlign = 'center';
+                th.textContent = `专家${i}`;
+                headerRow.appendChild(th);
             }
-            html += '</tr></thead><tbody>';
+            
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+            
+            // 创建表体
+            const tbody = document.createElement('tbody');
             
             // 添加指标行
             indicators.forEach(ind => {
                 const name = indicatorNames[ind] || ind;
                 const scores = expertScores[ind] || [];
                 
-                html += `<tr>
-                    <td style="text-align: center;"><span class="indicator-tag tag-${ind[0].toLowerCase()}">${ind}</span></td>
-                    <td style="text-align: center;">${name}</td>`;
+                const row = document.createElement('tr');
+                
+                // 指标列
+                const indicatorTd = document.createElement('td');
+                indicatorTd.style.textAlign = 'center';
+                const indicatorTag = document.createElement('span');
+                indicatorTag.className = `indicator-tag tag-${ind[0].toLowerCase()}`;
+                indicatorTag.textContent = ind;
+                indicatorTd.appendChild(indicatorTag);
+                row.appendChild(indicatorTd);
+                
+                // 风险因素列
+                const factorTd = document.createElement('td');
+                factorTd.style.textAlign = 'center';
+                factorTd.textContent = name;
+                row.appendChild(factorTd);
                 
                 // 添加专家评分输入框
                 for (let i = 0; i < expertCount; i++) {
                     const score = scores[i] || 0;
-                    html += `<td style="text-align: center;">
-                        <input type="number" class="score-input" 
-                            value="${score}" 
-                            min="0" 
-                            max="100" 
-                            step="1"
-                            onchange="updateExpertScore('${ind}', ${i}, this.value)"
-                            style="width: 40px; color: #333; font-weight: bold;">
-                    </td>`;
+                    const td = document.createElement('td');
+                    td.style.textAlign = 'center';
+                    
+                    const input = document.createElement('input');
+                    input.type = 'number';
+                    input.className = 'score-input';
+                    input.value = score;
+                    input.min = 0;
+                    input.max = 100;
+                    input.step = 1;
+                    input.style.width = '40px';
+                    input.style.color = '#333';
+                    input.style.fontWeight = 'bold';
+                    input.onchange = function() {
+                        updateExpertScore(ind, i, this.value);
+                    };
+                    
+                    td.appendChild(input);
+                    row.appendChild(td);
                 }
                 
-                html += '</tr>';
+                tbody.appendChild(row);
             });
             
-            html += '</tbody></table>';
-            container.innerHTML = html;
+            table.appendChild(tbody);
+            fragment.appendChild(table);
+            
+            // 清空容器并添加新内容
+            container.innerHTML = '';
+            container.appendChild(fragment);
         }
 
         // 更新专家评分
@@ -1347,19 +1415,23 @@
                 return;
             }
             
-            // 生成指标云图
-            const chart = echarts.init(document.getElementById('forwardCloudChart'));
+            // 使用缓存的图表实例
+            let chart = chartInstances.get('forwardCloudChart');
+            if (!chart) {
+                chart = echarts.init(document.getElementById('forwardCloudChart'));
+                chartInstances.set('forwardCloudChart', chart);
+            }
             
             // 生成云滴数据
             const drops = [];
-            const n = 500; // 云滴数量
+            const n = 300; // 减少云滴数量，提高性能
+            
+            // 预定义randn函数，避免重复定义
+            function randn() {
+                return Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
+            }
             
             for (let i = 0; i < n; i++) {
-                // 生成正态分布随机数
-                function randn() {
-                    return Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
-                }
-                
                 // 正向云发生器算法
                 const Enn = overallCloud.En + randn() * overallCloud.He;
                 const x = overallCloud.Ex + randn() * Enn;
@@ -1380,7 +1452,7 @@
             // 生成标准云滴
             const series = standardClouds.map(c => {
                 const cloudDrops = [];
-                for (let i = 0; i < 300; i++) {
+                for (let i = 0; i < 200; i++) { // 减少标准云滴数量
                     const Enn = c.En + randn() * c.He;
                     const x = c.Ex + randn() * Enn;
                     const u = Math.exp(-Math.pow(x - c.Ex, 2) / (2 * Enn * Enn));
@@ -1390,8 +1462,8 @@
                     name: c.name,
                     type: 'scatter',
                     data: cloudDrops,
-                    symbolSize: 8,
-                    itemStyle: { color: c.color, opacity: 0.6 }
+                    symbolSize: 6, // 减小符号大小
+                    itemStyle: { color: c.color, opacity: 0.5 } // 降低不透明度
                 };
             });
             
@@ -1400,8 +1472,8 @@
                 name: '综合指标',
                 type: 'scatter',
                 data: drops,
-                symbolSize: 10,
-                itemStyle: { color: '#000', opacity: 0.8 }
+                symbolSize: 8, // 减小符号大小
+                itemStyle: { color: '#000', opacity: 0.6 } // 降低不透明度
             });
             
             const option = {
@@ -1437,62 +1509,70 @@
             event.target.classList.add('active');
             document.getElementById(tabName).classList.add('active');
             
-            // 触发图表重绘
-            setTimeout(() => {
-                initCharts(tabName);
-                
-                // 如果切换到权重分析标签页，生成编辑表格
-                if (tabName === 'weight') {
-                    generateFrequencyEditTable();
-                    generateWeightEditTable();
-                }
-                
-                // 如果切换到云模型评估标签页，生成专家评分表格
-                if (tabName === 'cloud') {
-                    generateExpertScoreTable();
-                }
-            }, 100);
+            // 直接触发图表重绘，移除不必要的延迟
+            initCharts(tabName);
+            
+            // 如果切换到权重分析标签页，生成编辑表格
+            if (tabName === 'weight') {
+                generateFrequencyEditTable();
+                generateWeightEditTable();
+            }
+            
+            // 如果切换到云模型评估标签页，生成专家评分表格
+            if (tabName === 'cloud') {
+                generateExpertScoreTable();
+            }
         }
 
+        // 图表实例缓存
+        const chartInstances = new Map();
+        
         // 初始化图表
         function initCharts(tabName) {
             if (typeof echarts === 'undefined') return;
-            // 等待DOM元素完全渲染
-            setTimeout(function() {
-                switch(tabName) {
-                    case 'overview':
-                        initLevel1Chart();
-                        initCloudChart();
-                        initTop10Chart();
-                        break;
-                    case 'dematel':
-                        initCauseEffectChart();
-                        break;
-                    case 'weight':
-                        initSubjectiveWeightChart();
-                        initObjectiveWeightChart();
-                        initCombinedWeightChart();
-                        break;
-                    case 'cloud':
-                        initCloudScatterChart();
-                        initCloudCompareChart();
-                        break;
-                }
-                
-                // 确保所有图表正确渲染
-                setTimeout(function() {
-                    document.querySelectorAll('.chart').forEach(el => {
-                        const chart = echarts.getInstanceByDom(el);
-                        if (chart) chart.resize();
-                    });
-                }, 50);
-            }, 50);
+            
+            // 直接执行，不需要额外的setTimeout
+            switch(tabName) {
+                case 'overview':
+                    initLevel1Chart();
+                    initCloudChart();
+                    initTop10Chart();
+                    break;
+                case 'dematel':
+                    initCauseEffectChart();
+                    break;
+                case 'weight':
+                    initSubjectiveWeightChart();
+                    initObjectiveWeightChart();
+                    initCombinedWeightChart();
+                    break;
+                case 'cloud':
+                    initCloudScatterChart();
+                    initCloudCompareChart();
+                    break;
+            }
+            
+            // 确保所有图表正确渲染
+            // 使用requestAnimationFrame代替setTimeout，提高性能
+            requestAnimationFrame(function() {
+                document.querySelectorAll('.chart').forEach(el => {
+                    const chart = echarts.getInstanceByDom(el);
+                    if (chart) chart.resize();
+                });
+            });
         }
 
         // 一级指标风险分布雷达图
         function initLevel1Chart() {
             if (typeof echarts === 'undefined') return;
-            const chart = echarts.init(document.getElementById('level1Chart'));
+            
+            // 使用缓存的图表实例
+            let chart = chartInstances.get('level1Chart');
+            if (!chart) {
+                chart = echarts.init(document.getElementById('level1Chart'));
+                chartInstances.set('level1Chart', chart);
+            }
+            
             const option = {
                 backgroundColor: 'transparent',
                 radar: {
@@ -1524,7 +1604,13 @@
         // 综合评估云图
         function initCloudChart() {
             if (typeof echarts === 'undefined') return;
-            const chart = echarts.init(document.getElementById('cloudChart'));
+            
+            // 使用缓存的图表实例
+            let chart = chartInstances.get('cloudChart');
+            if (!chart) {
+                chart = echarts.init(document.getElementById('cloudChart'));
+                chartInstances.set('cloudChart', chart);
+            }
             
             // 生成云滴数据
             function generateCloudDrops(Ex, En, He, n = 500) {
@@ -1588,7 +1674,14 @@
         // TOP 10 关键风险指标
         function initTop10Chart() {
             if (typeof echarts === 'undefined') return;
-            const chart = echarts.init(document.getElementById('top10Chart'));
+            
+            // 使用缓存的图表实例
+            let chart = chartInstances.get('top10Chart');
+            if (!chart) {
+                chart = echarts.init(document.getElementById('top10Chart'));
+                chartInstances.set('top10Chart', chart);
+            }
+            
             const data = [
                 { name: 'A5-决策失误', value: 85.2 },
                 { name: 'C1-天气恶劣', value: 82.6 },
@@ -1633,10 +1726,12 @@
         // 中心度与原因度分析
         function initCauseEffectChart() {
             if (typeof echarts === 'undefined') return;
-            // 使用现有的图表实例，而不是每次创建新的
-            let chart = echarts.getInstanceByDom(document.getElementById('causeEffectChart'));
+            
+            // 使用缓存的图表实例
+            let chart = chartInstances.get('causeEffectChart');
             if (!chart) {
                 chart = echarts.init(document.getElementById('causeEffectChart'));
+                chartInstances.set('causeEffectChart', chart);
             }
             
             // 检查是否有计算结果
@@ -1728,7 +1823,14 @@
         // 主观权重
         function initSubjectiveWeightChart() {
             if (typeof echarts === 'undefined') return;
-            const chart = echarts.init(document.getElementById('subjectiveWeightChart'));
+            
+            // 使用缓存的图表实例
+            let chart = chartInstances.get('subjectiveWeightChart');
+            if (!chart) {
+                chart = echarts.init(document.getElementById('subjectiveWeightChart'));
+                chartInstances.set('subjectiveWeightChart', chart);
+            }
+            
             // 使用所有指标的权重数据，按照原始顺序
             const data = indicators
                 .map(ind => ({
@@ -1757,7 +1859,14 @@
         // 客观权重
         function initObjectiveWeightChart() {
             if (typeof echarts === 'undefined') return;
-            const chart = echarts.init(document.getElementById('objectiveWeightChart'));
+            
+            // 使用缓存的图表实例
+            let chart = chartInstances.get('objectiveWeightChart');
+            if (!chart) {
+                chart = echarts.init(document.getElementById('objectiveWeightChart'));
+                chartInstances.set('objectiveWeightChart', chart);
+            }
+            
             // 使用所有指标的权重数据，按照原始顺序
             const data = indicators
                 .map(ind => ({
@@ -1786,7 +1895,14 @@
         // 组合权重
         function initCombinedWeightChart() {
             if (typeof echarts === 'undefined') return;
-            const chart = echarts.init(document.getElementById('combinedWeightChart'));
+            
+            // 使用缓存的图表实例
+            let chart = chartInstances.get('combinedWeightChart');
+            if (!chart) {
+                chart = echarts.init(document.getElementById('combinedWeightChart'));
+                chartInstances.set('combinedWeightChart', chart);
+            }
+            
             // 使用所有指标的权重数据，按照原始顺序
             const data = indicators
                 .map(ind => ({
@@ -1840,7 +1956,14 @@
         // 云特征散点图
         function initCloudScatterChart() {
             if (typeof echarts === 'undefined') return;
-            const chart = echarts.init(document.getElementById('cloudScatterChart'));
+            
+            // 使用缓存的图表实例
+            let chart = chartInstances.get('cloudScatterChart');
+            if (!chart) {
+                chart = echarts.init(document.getElementById('cloudScatterChart'));
+                chartInstances.set('cloudScatterChart', chart);
+            }
+            
             const categories = ['A', 'B', 'C', 'D'];
             const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4'];
             
@@ -1892,7 +2015,13 @@
         // 指标云图对比（云图方式）
         function initCloudCompareChart() {
             if (typeof echarts === 'undefined') return;
-            const chart = echarts.init(document.getElementById('cloudCompareChart'));
+            
+            // 使用缓存的图表实例
+            let chart = chartInstances.get('cloudCompareChart');
+            if (!chart) {
+                chart = echarts.init(document.getElementById('cloudCompareChart'));
+                chartInstances.set('cloudCompareChart', chart);
+            }
             
             // 类别名称映射
             const categoryNames = {
@@ -1917,7 +2046,7 @@
                     const He = cloud.He;
                     
                     // 生成云滴
-                    for (let i = 0; i < 500; i++) { // 增加云滴数量，使云图更清晰
+                    for (let i = 0; i < 300; i++) { // 减少云滴数量，提高性能
                         // 生成正态分布随机数
                         function randn() {
                             return Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
@@ -1934,8 +2063,8 @@
                         name: categoryNames[category],
                         type: 'scatter',
                         data: drops,
-                        symbolSize: 8,
-                        itemStyle: { color: colors[colorIndex % colors.length], opacity: 0.6 }
+                        symbolSize: 6, // 减小符号大小，提高性能
+                        itemStyle: { color: colors[colorIndex % colors.length], opacity: 0.5 } // 降低不透明度，提高性能
                     });
                     
                     colorIndex++;
@@ -1976,7 +2105,7 @@
         function generateDirectMatrixTable() {
             const container = document.getElementById('directMatrixTable');
             
-            let html = '<table style="width: 100%; table-layout: fixed;"><thead><tr><th style="width: 60px; text-align: center;">指标</th>';
+            let html = '<table style="width: 100%; table-layout: fixed;"><thead><tr><th style="width: 60px;">指标</th>';
             indicators.forEach(ind => {
                 html += `<th style="width: 40px; text-align: center;">${ind}</th>`;
             });
